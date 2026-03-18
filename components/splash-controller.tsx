@@ -1,10 +1,24 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { SplashScreen } from './splash-screen'
 
 export function SplashController() {
-  const [done, setDone] = useState(false)
-  if (done) return null
-  return <SplashScreen onComplete={() => setDone(true)} />
+  const [show, setShow] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    const seen = sessionStorage.getItem('splash-seen')
+    setShow(!seen)
+  }, [])
+
+  if (!show) return null
+
+  return (
+    <SplashScreen
+      onComplete={() => {
+        sessionStorage.setItem('splash-seen', '1')
+        setShow(false)
+      }}
+    />
+  )
 }

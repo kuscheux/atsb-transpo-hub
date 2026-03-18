@@ -13,6 +13,11 @@ type Phase = 'tracing' | 'revealing' | 'fading'
 export function SplashScreen({ onComplete }: { onComplete: () => void }) {
   const [phase, setPhase] = useState<Phase>('tracing')
 
+  const isTeamsters = localStorage.getItem('app-theme') === 'teamsters'
+  const colors = isTeamsters
+    ? { bg: '#112440', trace: '#FEA81A', glow: '#FEA81A', logoFilter: undefined }
+    : { bg: '#09090b', trace: '#e4e4e7', glow: '#e4e4e7', logoFilter: 'grayscale(1) brightness(2)' }
+
   useEffect(() => {
     const timers = [
       setTimeout(() => setPhase('revealing'), 2000),
@@ -24,12 +29,8 @@ export function SplashScreen({ onComplete }: { onComplete: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#112440] overflow-hidden"
-      style={{
-        opacity: phase === 'fading' ? 0 : 1,
-        transition: 'opacity 0.7s ease',
-        pointerEvents: phase === 'fading' ? 'none' : 'auto',
-      }}
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden"
+      style={{ background: colors.bg, opacity: phase === 'fading' ? 0 : 1, transition: 'opacity 0.7s ease', pointerEvents: phase === 'fading' ? 'none' : 'auto' }}
     >
       {/* Ambient glow */}
       <div
@@ -39,7 +40,7 @@ export function SplashScreen({ onComplete }: { onComplete: () => void }) {
           transition: 'opacity 1.2s ease',
         }}
       >
-        <div className="w-[600px] h-[600px] rounded-full bg-[#FEA81A] opacity-10 blur-[120px]" />
+        <div className="w-[600px] h-[600px] rounded-full opacity-10 blur-[120px]" style={{ background: colors.glow }} />
       </div>
 
       <div
@@ -81,12 +82,12 @@ export function SplashScreen({ onComplete }: { onComplete: () => void }) {
               className="trace-body"
               d={BODY_PATH}
               pathLength="1"
-              stroke="#FEA81A"
+              stroke={colors.trace}
               strokeWidth="10"
               strokeLinejoin="round"
               strokeLinecap="round"
               fill="none"
-              style={{ filter: 'drop-shadow(0 0 10px #FEA81A88)' }}
+              style={{ filter: `drop-shadow(0 0 10px ${colors.trace}88)` }}
             />
 
             {/* Circle outline trace */}
@@ -94,12 +95,12 @@ export function SplashScreen({ onComplete }: { onComplete: () => void }) {
               className="trace-circle"
               d={CIRCLE_PATH}
               pathLength="1"
-              stroke="#FEA81A"
+              stroke={colors.trace}
               strokeWidth="10"
               strokeLinejoin="round"
               strokeLinecap="round"
               fill="none"
-              style={{ filter: 'drop-shadow(0 0 10px #FEA81A88)' }}
+              style={{ filter: `drop-shadow(0 0 10px ${colors.trace}88)` }}
             />
           </svg>
 
@@ -115,7 +116,7 @@ export function SplashScreen({ onComplete }: { onComplete: () => void }) {
             <img
               src="/teamsters-logo.svg"
               alt="Teamsters"
-              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+              style={{ width: '100%', height: '100%', objectFit: 'contain', filter: colors.logoFilter }}
             />
           </div>
         </div>
