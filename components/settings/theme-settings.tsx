@@ -3,6 +3,7 @@
 import { useAppTheme, type AppTheme } from '@/components/theme-provider'
 import { cn } from '@/lib/utils'
 import { Check } from 'lucide-react'
+import { sounds } from '@/lib/sounds'
 
 const themes: {
   id: AppTheme
@@ -46,7 +47,7 @@ export function ThemeSettings() {
         return (
           <button
             key={t.id}
-            onClick={() => setTheme(t.id)}
+            onClick={() => { sounds.toggle(); setTheme(t.id) }}
             className={cn(
               'group relative flex flex-col gap-3 rounded-xl border-2 p-4 text-left transition-all hover:border-primary',
               active ? 'border-primary' : 'border-border',

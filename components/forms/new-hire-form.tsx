@@ -17,6 +17,7 @@ import {
   ChevronRight,
   Info,
 } from "lucide-react"
+import { sounds } from "@/lib/sounds"
 
 type FormData = {
   driverName: string
@@ -87,8 +88,10 @@ export function NewHireForm() {
         }),
       })
       if (!res.ok) throw new Error("Submission failed")
+      sounds.success()
       setStep("success")
     } catch {
+      sounds.error()
       setError("Something went wrong. Please try again.")
     } finally {
       setSubmitting(false)
@@ -231,7 +234,7 @@ export function NewHireForm() {
             </CardContent>
           </Card>
 
-          <Button className="w-full gap-2" size="lg" onClick={() => setStep("form")}>
+          <Button className="w-full gap-2" size="lg" onClick={() => { sounds.click(); setStep("form") }}>
             Begin New Hire Form
             <ChevronRight className="h-4 w-4" />
           </Button>
@@ -320,7 +323,7 @@ export function NewHireForm() {
                 <label className="flex items-start gap-3 cursor-pointer">
                   <Checkbox
                     checked={form.ackWorkTimes}
-                    onCheckedChange={(v) => set("ackWorkTimes", !!v)}
+                    onCheckedChange={(v) => { sounds.toggle(); set("ackWorkTimes", !!v) }}
                     className="mt-0.5"
                   />
                   <span className="text-sm leading-snug">
@@ -330,7 +333,7 @@ export function NewHireForm() {
                 <label className="flex items-start gap-3 cursor-pointer">
                   <Checkbox
                     checked={form.ackVehicleSwap}
-                    onCheckedChange={(v) => set("ackVehicleSwap", !!v)}
+                    onCheckedChange={(v) => { sounds.toggle(); set("ackVehicleSwap", !!v) }}
                     className="mt-0.5"
                   />
                   <span className="text-sm leading-snug">
@@ -340,7 +343,7 @@ export function NewHireForm() {
                 <label className="flex items-start gap-3 cursor-pointer">
                   <Checkbox
                     checked={form.ackTimecard}
-                    onCheckedChange={(v) => set("ackTimecard", !!v)}
+                    onCheckedChange={(v) => { sounds.toggle(); set("ackTimecard", !!v) }}
                     className="mt-0.5"
                   />
                   <span className="text-sm leading-snug">

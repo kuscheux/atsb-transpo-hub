@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Send, MessageSquare, Plug } from "lucide-react"
 import { supabase, isSupabaseConfigured } from "@/lib/supabase"
+import { sounds } from "@/lib/sounds"
 
 type Message = {
   id: string
@@ -56,7 +57,11 @@ export function RealTimeChat() {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "chat_messages" },
-        (payload) => setMessages((prev) => [...prev, payload.new as Message])
+        (payload) => {
+          const msg = payload.new as Message
+          setMessages((prev) => [...prev, msg])
+          if (msg.user_name !== userName) sounds.receive()
+        }
       )
       .subscribe()
 
@@ -85,6 +90,8 @@ export function RealTimeChat() {
     if (!input.trim()) return
     const text = input.trim()
     setInput("")
+
+    sounds.send()
 
     if (!isSupabaseConfigured) {
       // Local demo mode

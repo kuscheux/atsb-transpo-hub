@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { MoreHorizontal, MessageSquare, CheckCircle, XCircle, RefreshCw } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { sounds } from "@/lib/sounds"
 
 type Application = {
   id: string
@@ -70,6 +71,7 @@ export function DriverApplications() {
   }
 
   async function sendInvite(app: Application, resend = false) {
+    sounds.send()
     await fetch("/api/send-invite", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -79,6 +81,9 @@ export function DriverApplications() {
   }
 
   async function updateStatus(id: string, status: Application["status"]) {
+    if (status === "approved") sounds.approve()
+    else if (status === "onboarded") sounds.success()
+    else sounds.click()
     await supabase.from("driver_applications").update({ status }).eq("id", id)
   }
 
@@ -101,7 +106,7 @@ export function DriverApplications() {
             <Badge variant="secondary">{applications.length}</Badge>
           )}
         </CardTitle>
-        <Button variant="outline" size="sm" onClick={fetchApplications} className="gap-1">
+        <Button variant="outline" size="sm" onClick={() => { sounds.click(); fetchApplications() }} className="gap-1">
           <RefreshCw className="h-3.5 w-3.5" />
           Refresh
         </Button>
