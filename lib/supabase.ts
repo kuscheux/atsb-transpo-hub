@@ -1,17 +1,28 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@/utils/supabase/client'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key'
-
-export const isSupabaseConfigured =
-  !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
-  process.env.NEXT_PUBLIC_SUPABASE_URL !== 'your_supabase_url'
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Singleton browser client — used by client components
+export const supabase = createClient()
 
 export type Database = {
   public: {
     Tables: {
+      profiles: {
+        Row: {
+          id: string
+          user_name: string
+          user_role: 'coordinator' | 'captain' | 'dispatcher' | 'driver'
+          created_at: string
+        }
+        Insert: {
+          id: string
+          user_name: string
+          user_role?: 'coordinator' | 'captain' | 'dispatcher' | 'driver'
+        }
+        Update: {
+          user_name?: string
+          user_role?: 'coordinator' | 'captain' | 'dispatcher' | 'driver'
+        }
+      }
       driver_applications: {
         Row: {
           id: string

@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react"
-import { supabase, isSupabaseConfigured } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase"
 
 type CalendarEvent = {
   id: string
@@ -32,25 +32,15 @@ const typeLabels: Record<CalendarEvent["event_type"], string> = {
 
 const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"]
 
-const demoEvents: CalendarEvent[] = [
-  { id: "1", title: "Production Day 1", event_date: "2026-03-17", event_type: "shoot" },
-  { id: "2", title: "Unit Wrap", event_date: "2026-03-20", event_type: "meeting" },
-  { id: "3", title: "Driver Fittings", event_date: "2026-03-22", event_type: "fitting" },
-  { id: "4", title: "Location Scout", event_date: "2026-03-25", event_type: "travel" },
-  { id: "5", title: "Shoot Day 8", event_date: "2026-03-28", event_type: "shoot" },
-  { id: "6", title: "Production Day 2", event_date: "2026-03-18", event_type: "shoot" },
-]
-
 export function DashboardCalendar() {
   const today = new Date()
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`
 
   const [current, setCurrent] = useState(new Date(today.getFullYear(), today.getMonth(), 1))
-  const [events, setEvents] = useState<CalendarEvent[]>(isSupabaseConfigured ? [] : demoEvents)
+  const [events, setEvents] = useState<CalendarEvent[]>([])
   const [selectedDate, setSelectedDate] = useState<string | null>(todayStr)
 
   useEffect(() => {
-    if (!isSupabaseConfigured) return
     fetchEvents()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current])
@@ -95,11 +85,8 @@ export function DashboardCalendar() {
         <CardTitle className="flex items-center gap-2 text-base">
           <CalendarDays className="h-4 w-4" />
           Production Calendar
-          <Badge
-            variant="outline"
-            className={`ml-auto text-xs font-normal ${isSupabaseConfigured ? "text-green-500 border-green-500/30" : "text-yellow-500 border-yellow-500/30"}`}
-          >
-            {isSupabaseConfigured ? "Live" : "Demo"}
+          <Badge variant="outline" className="ml-auto text-xs font-normal text-green-500 border-green-500/30">
+            Live
           </Badge>
         </CardTitle>
       </CardHeader>

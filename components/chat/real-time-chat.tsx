@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { Send, MessageSquare, Plug } from "lucide-react"
-import { supabase, isSupabaseConfigured } from "@/lib/supabase"
+import { Send, MessageSquare, ImagePlus, X, Loader2 } from "lucide-react"
+import { supabase } from "@/lib/supabase"
 import { sounds } from "@/lib/sounds"
 
 type Message = {
@@ -16,6 +16,7 @@ type Message = {
   user_name: string
   message: string
   user_role: "coordinator" | "captain" | "dispatcher" | "driver"
+  image_url?: string | null
 }
 
 const roleColors: Record<Message["user_role"], string> = {
@@ -32,25 +33,40 @@ const roleLabels: Record<Message["user_role"], string> = {
   driver: "Driver",
 }
 
-// Demo messages shown when Supabase isn't configured
-const demoMessages: Message[] = [
-  { id: "1", created_at: new Date(Date.now() - 3600000).toISOString(), user_name: "Jack Herrin", message: "All units check in — base camp is set.", user_role: "captain" },
-  { id: "2", created_at: new Date(Date.now() - 1800000).toISOString(), user_name: "Taylor Evanoff", message: "Van #1 and Van #2 are at holding. Van #3 en route.", user_role: "dispatcher" },
-  { id: "3", created_at: new Date(Date.now() - 900000).toISOString(), user_name: "Donny Thrift", message: "Copy that. Fuel truck topped off at 0600.", user_role: "coordinator" },
-]
-
 export function RealTimeChat() {
-  const [messages, setMessages] = useState<Message[]>(isSupabaseConfigured ? [] : demoMessages)
-  const [input, setInput] = useState("")
-  const [userName] = useState("Donny Thrift")
-  const [userRole] = useState<Message["user_role"]>("coordinator")
-  const [error, setError] = useState("")
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const [messages, setMessages]       = useState<Message[]>([])
+  const [input, setInput]             = useState("")
+  const [userName, setUserName]       = useState("")
+  const [userRole, setUserRole]       = useState<Message["user_role"]>("coordinator")
+  const [error, setError]             = useState("")
+  const [pendingImage, setPendingImage] = useState<File | null>(null)
+  const [pendingPreview, setPendingPreview] = useState<string | null>(null)
+  const [uploading, setUploading]     = useState(false)
+  const userNameRef                   = useRef("")
+  const messagesContainerRef          = useRef<HTMLDivElement>(null)
+  const fileInputRef                  = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (!isSupabaseConfigured) return
+    async function init() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
 
-    fetchMessages()
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("user_name, user_role")
+        .eq("id", user.id)
+        .single()
+
+      if (profile) {
+        setUserName(profile.user_name)
+        setUserRole(profile.user_role as Message["user_role"])
+        userNameRef.current = profile.user_name
+      }
+
+      fetchMessages()
+    }
+
+    init()
 
     const channel = supabase
       .channel("chat_messages")
@@ -60,7 +76,7 @@ export function RealTimeChat() {
         (payload) => {
           const msg = payload.new as Message
           setMessages((prev) => [...prev, msg])
-          if (msg.user_name !== userName) sounds.receive()
+          if (msg.user_name !== userNameRef.current) sounds.receive()
         }
       )
       .subscribe()
@@ -69,7 +85,12 @@ export function RealTimeChat() {
   }, [])
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+    const lastMsg = messages[messages.length - 1]
+    // Only auto-scroll for incoming messages from others, never on own send
+    if (!lastMsg || lastMsg.user_name === userNameRef.current) return
+    const el = messagesContainerRef.current
+    if (!el) return
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" })
   }, [messages])
 
   async function fetchMessages() {
@@ -86,35 +107,55 @@ export function RealTimeChat() {
     }
   }
 
+  function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPendingImage(file)
+    setPendingPreview(URL.createObjectURL(file))
+    e.target.value = ""
+  }
+
+  function clearPendingImage() {
+    if (pendingPreview) URL.revokeObjectURL(pendingPreview)
+    setPendingImage(null)
+    setPendingPreview(null)
+  }
+
   async function sendMessage() {
-    if (!input.trim()) return
+    if (!input.trim() && !pendingImage) return
     const text = input.trim()
     setInput("")
-
+    setUploading(true)
     sounds.send()
 
-    if (!isSupabaseConfigured) {
-      // Local demo mode
-      setMessages((prev) => [...prev, {
-        id: Date.now().toString(),
-        created_at: new Date().toISOString(),
-        user_name: userName,
-        message: text,
-        user_role: userRole,
-      }])
-      return
+    let imageUrl: string | null = null
+
+    if (pendingImage) {
+      const ext  = pendingImage.name.split(".").pop() ?? "jpg"
+      const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+      const { error: uploadErr } = await supabase.storage
+        .from("chat-photos")
+        .upload(path, pendingImage, { contentType: pendingImage.type, upsert: false })
+
+      if (!uploadErr) {
+        const { data } = supabase.storage.from("chat-photos").getPublicUrl(path)
+        imageUrl = data.publicUrl
+      }
+      clearPendingImage()
     }
 
     try {
       const { error } = await supabase.from("chat_messages").insert({
         user_name: userName,
-        message: text,
+        message:   text || "",
         user_role: userRole,
+        image_url: imageUrl,
       })
       if (error) throw error
     } catch {
       setError("Failed to send.")
     }
+    setUploading(false)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -130,27 +171,18 @@ export function RealTimeChat() {
         <CardTitle className="flex items-center gap-2 text-base">
           <MessageSquare className="h-4 w-4" />
           Crew Chat
-          <Badge
-            variant="outline"
-            className={`ml-auto text-xs font-normal ${isSupabaseConfigured ? "text-green-500 border-green-500/30" : "text-yellow-500 border-yellow-500/30"}`}
-          >
-            {isSupabaseConfigured ? "Live" : "Demo"}
+          <Badge variant="outline" className="ml-auto text-xs font-normal text-green-500 border-green-500/30">
+            Live
           </Badge>
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col flex-1 gap-3 overflow-hidden p-4 pt-0">
-        {!isSupabaseConfigured && (
-          <div className="flex items-center gap-2 rounded-lg border border-yellow-500/20 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-500">
-            <Plug className="h-3 w-3 shrink-0" />
-            Add Supabase credentials to enable live chat
-          </div>
-        )}
         {error && (
           <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
             {error}
           </div>
         )}
-        <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto space-y-3 pr-1">
           {messages.length === 0 ? (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
               No messages yet. Start the conversation.
@@ -173,9 +205,20 @@ export function RealTimeChat() {
                         {roleLabels[msg.user_role]}
                       </Badge>
                     </div>
-                    <div className={`rounded-lg px-3 py-2 text-sm ${isMe ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}`}>
-                      {msg.message}
-                    </div>
+                    {msg.image_url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={msg.image_url}
+                        alt="attachment"
+                        className="rounded-lg max-w-[200px] max-h-[200px] object-cover cursor-pointer"
+                        onClick={() => window.open(msg.image_url!, "_blank")}
+                      />
+                    )}
+                    {msg.message && (
+                      <div className={`rounded-lg px-3 py-2 text-sm ${isMe ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}`}>
+                        {msg.message}
+                      </div>
+                    )}
                     <span className="text-[10px] text-muted-foreground">
                       {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </span>
@@ -184,18 +227,48 @@ export function RealTimeChat() {
               )
             })
           )}
-          <div ref={bottomRef} />
         </div>
+        {/* Pending image preview */}
+        {pendingPreview && (
+          <div className="relative w-fit">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={pendingPreview} alt="pending" className="rounded-lg h-16 w-16 object-cover" />
+            <button
+              onClick={clearPendingImage}
+              className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground"
+            >
+              <X className="h-2.5 w-2.5" />
+            </button>
+          </div>
+        )}
         <div className="flex gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleImageSelect}
+          />
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="shrink-0"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+          >
+            <ImagePlus className="h-4 w-4" />
+          </Button>
           <Input
             placeholder="Message the crew..."
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             className="flex-1"
+            disabled={uploading}
           />
-          <Button size="icon" onClick={sendMessage} disabled={!input.trim()}>
-            <Send className="h-4 w-4" />
+          <Button size="icon" onClick={sendMessage} disabled={(!input.trim() && !pendingImage) || uploading}>
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </div>
       </CardContent>

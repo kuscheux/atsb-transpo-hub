@@ -20,6 +20,8 @@ export async function POST(request: Request) {
         acknowledged_work_times: body.acknowledged_work_times,
         acknowledged_vehicle_swap: body.acknowledged_vehicle_swap,
         acknowledged_timecard: body.acknowledged_timecard,
+        license_front_url: body.license_front_url || null,
+        license_back_url: body.license_back_url || null,
         status: "pending",
         invite_sent: false,
       })

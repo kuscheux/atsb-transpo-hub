@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,7 +16,11 @@ import {
   CheckCircle2,
   ChevronRight,
   Info,
+  Camera,
+  X,
+  Upload,
 } from "lucide-react"
+import { createClient } from "@/utils/supabase/client"
 import { sounds } from "@/lib/sounds"
 
 type FormData = {
@@ -30,6 +34,8 @@ type FormData = {
   ackTimecard: boolean
 }
 
+type LicensePhoto = { file: File; preview: string; url?: string }
+
 type Step = "intro" | "form" | "success"
 
 const contacts = [
@@ -41,9 +47,14 @@ const contacts = [
 ]
 
 export function NewHireForm() {
-  const [step, setStep] = useState<Step>("intro")
+  const [step, setStep]       = useState<Step>("intro")
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState("")
+  const [error, setError]     = useState("")
+  const [licenseFront, setLicenseFront] = useState<LicensePhoto | null>(null)
+  const [licenseBack, setLicenseBack]   = useState<LicensePhoto | null>(null)
+  const frontRef = useRef<HTMLInputElement>(null)
+  const backRef  = useRef<HTMLInputElement>(null)
+
   const [form, setForm] = useState<FormData>({
     driverName: "",
     phoneNumber: "",
@@ -67,24 +78,44 @@ export function NewHireForm() {
     form.ackVehicleSwap &&
     form.ackTimecard
 
+  async function uploadLicense(photo: LicensePhoto, side: "front" | "back") {
+    const supabase = createClient()
+    const ext  = photo.file.name.split(".").pop() ?? "jpg"
+    const path = `${Date.now()}-${side}.${ext}`
+    const { error } = await supabase.storage
+      .from("license-photos")
+      .upload(path, photo.file, { contentType: photo.file.type, upsert: false })
+    if (error) return null
+    // private bucket — return path, not public URL
+    return path
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!canSubmit) return
     setSubmitting(true)
     setError("")
     try {
+      let licenseFrontUrl: string | null = null
+      let licenseBackUrl:  string | null = null
+
+      if (licenseFront) licenseFrontUrl = await uploadLicense(licenseFront, "front")
+      if (licenseBack)  licenseBackUrl  = await uploadLicense(licenseBack, "back")
+
       const res = await fetch("/api/driver-apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          driver_name: form.driverName,
-          phone_number: form.phoneNumber,
-          email: form.email,
-          last_5_ssn: form.last5SSN,
-          hired_to_drive: form.hiredToDrive,
-          acknowledged_work_times: form.ackWorkTimes,
+          driver_name:              form.driverName,
+          phone_number:             form.phoneNumber,
+          email:                    form.email,
+          last_5_ssn:               form.last5SSN,
+          hired_to_drive:           form.hiredToDrive,
+          acknowledged_work_times:  form.ackWorkTimes,
           acknowledged_vehicle_swap: form.ackVehicleSwap,
-          acknowledged_timecard: form.ackTimecard,
+          acknowledged_timecard:    form.ackTimecard,
+          license_front_url:        licenseFrontUrl,
+          license_back_url:         licenseBackUrl,
         }),
       })
       if (!res.ok) throw new Error("Submission failed")
@@ -95,6 +126,25 @@ export function NewHireForm() {
       setError("Something went wrong. Please try again.")
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  function handleLicenseCapture(side: "front" | "back", e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const preview = URL.createObjectURL(file)
+    if (side === "front") setLicenseFront({ file, preview })
+    else setLicenseBack({ file, preview })
+    e.target.value = ""
+  }
+
+  function clearLicense(side: "front" | "back") {
+    if (side === "front") {
+      if (licenseFront?.preview) URL.revokeObjectURL(licenseFront.preview)
+      setLicenseFront(null)
+    } else {
+      if (licenseBack?.preview) URL.revokeObjectURL(licenseBack.preview)
+      setLicenseBack(null)
     }
   }
 
@@ -309,6 +359,62 @@ export function NewHireForm() {
                 <p className="text-xs text-muted-foreground">
                   You won't receive your unit number until your start date
                 </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* ── Driver's License Capture (optional) ─────────────────── */}
+          <Card>
+            <CardContent className="pt-6 space-y-4">
+              <div>
+                <p className="text-sm font-semibold flex items-center gap-1.5">
+                  <Camera className="h-4 w-4 text-muted-foreground" />
+                  Driver&apos;s License Photos
+                  <span className="ml-1 text-xs font-normal text-muted-foreground">(Optional)</span>
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Capture or upload front and back of your CDL. Stored securely for DOT compliance.
+                </p>
+              </div>
+              <input ref={frontRef} type="file" accept="image/*" capture="environment" className="hidden"
+                onChange={(e) => handleLicenseCapture("front", e)} />
+              <input ref={backRef}  type="file" accept="image/*" capture="environment" className="hidden"
+                onChange={(e) => handleLicenseCapture("back", e)} />
+              <div className="grid grid-cols-2 gap-3">
+                {(["front", "back"] as const).map((side) => {
+                  const photo = side === "front" ? licenseFront : licenseBack
+                  const ref   = side === "front" ? frontRef : backRef
+                  return (
+                    <div key={side}>
+                      <p className="text-xs font-medium mb-1.5 capitalize">{side}</p>
+                      {photo ? (
+                        <div className="relative rounded-xl overflow-hidden border border-border aspect-[1.6]">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={photo.preview} alt={`license ${side}`} className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => clearLicense(side)}
+                            className="absolute top-1.5 right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => ref.current?.click()}
+                          className="w-full aspect-[1.6] rounded-xl border border-dashed border-border flex flex-col items-center justify-center gap-1.5 hover:bg-accent transition-colors"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <Camera className="h-4 w-4 text-muted-foreground" />
+                            <Upload className="h-3.5 w-3.5 text-muted-foreground" />
+                          </div>
+                          <span className="text-xs text-muted-foreground">Tap to capture or upload</span>
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </CardContent>
           </Card>
